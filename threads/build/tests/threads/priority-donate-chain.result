@@ -1,11 +1,2 @@
 FAIL
-Kernel panic in run: PANIC at ../../lib/kernel/list.c:158 in list_insert(): assertion `is_interior (before) || is_tail (before)' failed.
-Call stack: 0x8004213489 0x80042139d2 0x8004213c7a 0x80042099fe 0x8004209e5f 0x80042197e8 0x8004207453
-Translation of call stack:
-0x0000008004213489: debug_panic (lib/kernel/debug.c:32)
-0x00000080042139d2: list_insert (lib/kernel/list.c:159)
-0x0000008004213c7a: list_push_back (lib/kernel/list.c:204)
-0x00000080042099fe: sema_down (threads/synch.c:70)
-0x0000008004209e5f: lock_acquire (threads/synch.c:192)
-0x00000080042197e8: donor_thread_func (tests/threads/priority-donate-chain.c:93)
-0x0000008004207453: kernel_thread (threads/thread.c:459)
+Run didn't shut down properly: no "Powering off" message

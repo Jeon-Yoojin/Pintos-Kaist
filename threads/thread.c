@@ -80,6 +80,25 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
+static bool
+value_more_priority (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority > b->priority;
+}
+static bool
+value_less_wakeup_ticks (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->wakeup_ticks < b->wakeup_ticks;
+}
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -320,29 +339,8 @@ thread_sleep (int64_t wake_time) {
 	if (target != idle_thread)
 	{
 		target->wakeup_ticks = wake_time;
-		struct list_elem *e;
-		/* insert the sleep thread in ascending order in sleep_list */	
-		if (!list_empty (&waiting_list))
-		{
-			int is_inserted=0;
- 			for (e = list_begin (&waiting_list); e != list_end (&waiting_list); e = list_next (e)) 
-			{
-				struct thread *curr = list_entry (e, struct thread, elem);
-				if (curr->wakeup_ticks >= wake_time)
-				{
-					list_insert (e, &target->elem);
-					is_inserted=1;
-					break;
-				}
- 			}
-			if (!is_inserted) /* insert the last position of wating list */
-				list_push_back(&waiting_list, &target->elem);
-		}
-		else
-		{
-			list_push_front(&waiting_list, &target->elem);
-		}
-
+		list_push_back(&waiting_list, &target->elem);
+		list_sort (&waiting_list, value_less_wakeup_ticks, NULL);
 		do_schedule (THREAD_BLOCKED);
 	}
 	else
@@ -371,6 +369,8 @@ thread_ready (int64_t ticks) {
 		else /* 오름차순이기 때문에 조건을 만족하지 못하는 하나의 thread가 발견되면 그 이후의 wait thread들은 검색 필요가 없다 */
 			break;
 	}
+	/* 우선순위 순으로 ready list 정렬 */
+	list_sort (&ready_list, value_more_priority, NULL);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */

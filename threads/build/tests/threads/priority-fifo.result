@@ -1,2 +1,2 @@
 FAIL
-No iterations found in output.
+Run didn't shut down properly: no "Powering off" message
