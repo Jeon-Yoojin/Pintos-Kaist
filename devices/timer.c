@@ -93,12 +93,7 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-
-	struct thread *curr = thread_current();
-	curr->status = THREAD_BLOCKED;
-	curr->wakeup_ticks = start + ticks;
-
-	thread_wait(curr);
+	thread_wait(start + ticks);
 
 	// while (timer_elapsed (start) < ticks)
 	// thread_yield ();

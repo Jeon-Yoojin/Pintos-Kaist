@@ -109,6 +109,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&waiting_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -310,14 +311,16 @@ thread_yield (void) {
 }
 
 void
-thread_wait (struct thread *curr) {
-	printf("===================================\n\n\n");
+thread_wait (int64_t wake_time) {
+	struct thread *curr = thread_current();
 	enum intr_level old_level;
 	// curr thread를 waiting list에 추가하기
+
 	old_level = intr_disable ();
-	// idle thread인 경우
-	if (curr != idle_thread)
-		list_push_back(&waiting_list, &curr->elem);
+	curr->wakeup_ticks = wake_time;
+	list_push_back(&waiting_list, &curr->elem);
+
+	do_schedule(THREAD_BLOCKED);
 	intr_set_level (old_level);
 }
 
@@ -327,15 +330,20 @@ thread_ready (int64_t ticks) {
 	struct thread *curr;
 
 	// 현재 ticks와 비교해서 waiting list 안에 깨울 애들이 있는지 찾기
-	for (e = list_begin(&waiting_list); e != list_end(&waiting_list); e = list_next(e)){
+	for (e = list_begin(&waiting_list); e != list_end(&waiting_list);){
 		curr = list_entry(e, struct thread, elem);
 		if (curr->wakeup_ticks <= ticks) {
 			// waiting list에서 삭제
+			struct list_elem *next = list_next(e);
 			list_remove(&curr->elem);
 			// status 변경 및 ready queue로 insert
 			curr->status = THREAD_READY;
 			list_push_back(&ready_list, &curr->elem);
 			// thread_unblock(curr);
+			e = next;
+		}
+		else{
+			e = list_next(e);
 		}
 	}
 }
