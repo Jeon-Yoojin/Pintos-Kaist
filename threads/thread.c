@@ -27,6 +27,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list waiting_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -306,6 +307,37 @@ thread_yield (void) {
 		list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
+}
+
+void
+thread_wait (struct thread *curr) {
+	printf("===================================\n\n\n");
+	enum intr_level old_level;
+	// curr thread를 waiting list에 추가하기
+	old_level = intr_disable ();
+	// idle thread인 경우
+	if (curr != idle_thread)
+		list_push_back(&waiting_list, &curr->elem);
+	intr_set_level (old_level);
+}
+
+void
+thread_ready (int64_t ticks) {
+	struct list_elem *e;
+	struct thread *curr;
+
+	// 현재 ticks와 비교해서 waiting list 안에 깨울 애들이 있는지 찾기
+	for (e = list_begin(&waiting_list); e != list_end(&waiting_list); e = list_next(e)){
+		curr = list_entry(e, struct thread, elem);
+		if (curr->wakeup_ticks <= ticks) {
+			// waiting list에서 삭제
+			list_remove(&curr->elem);
+			// status 변경 및 ready queue로 insert
+			curr->status = THREAD_READY;
+			list_push_back(&ready_list, &curr->elem);
+			// thread_unblock(curr);
+		}
+	}
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
