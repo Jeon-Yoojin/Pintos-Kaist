@@ -323,7 +323,41 @@ thread_wait (int64_t wake_time) {
 	do_schedule(THREAD_BLOCKED);
 	intr_set_level (old_level);
 }
+void
+thread_sleep (int64_t wake_time) {
+	struct thread *target = thread_current ();
+	enum intr_level old_level;
 
+	ASSERT (!intr_context ());
+
+	old_level = intr_disable ();
+	if (target != idle_thread)
+	{
+		target->wakeup_ticks = wake_time;
+		struct list_elem *e;
+		/* search the threads in sleep_list */	
+		if (!list_empty (&waiting_list))
+		{
+ 			for (e = list_begin (&waiting_list); e != list_end (&waiting_list); e = list_next (e)) 
+			{
+				struct thread *curr = list_entry (e, struct thread, elem);
+				if (curr->wakeup_ticks >= wake_time)
+				{
+					list_insert (e, &target->elem);
+					break;
+				}
+ 			}
+		}
+		else
+			list_push_front(&waiting_list, &target->elem);
+
+		do_schedule (THREAD_BLOCKED);
+	}
+	else
+		do_schedule (THREAD_READY);
+	
+	intr_set_level (old_level);
+}
 void
 thread_ready (int64_t ticks) {
 	struct list_elem *e;
@@ -343,7 +377,8 @@ thread_ready (int64_t ticks) {
 			e = next;
 		}
 		else{
-			e = list_next(e);
+			break;
+			// e = list_next(e);
 		}
 	}
 }
