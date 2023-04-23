@@ -309,20 +309,6 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
-
-void
-thread_wait (int64_t wake_time) {
-	struct thread *curr = thread_current();
-	enum intr_level old_level;
-	// curr thread를 waiting list에 추가하기
-
-	old_level = intr_disable ();
-	curr->wakeup_ticks = wake_time;
-	list_push_back(&waiting_list, &curr->elem);
-
-	do_schedule(THREAD_BLOCKED);
-	intr_set_level (old_level);
-}
 void
 thread_sleep (int64_t wake_time) {
 	struct thread *target = thread_current ();
@@ -335,21 +321,28 @@ thread_sleep (int64_t wake_time) {
 	{
 		target->wakeup_ticks = wake_time;
 		struct list_elem *e;
-		/* search the threads in sleep_list */	
+		/* insert the sleep thread in ascending order in sleep_list */	
 		if (!list_empty (&waiting_list))
 		{
+			int is_inserted=0;
  			for (e = list_begin (&waiting_list); e != list_end (&waiting_list); e = list_next (e)) 
 			{
 				struct thread *curr = list_entry (e, struct thread, elem);
 				if (curr->wakeup_ticks >= wake_time)
 				{
 					list_insert (e, &target->elem);
+					is_inserted=1;
 					break;
 				}
  			}
+			if (!is_inserted) /* insert the last position of wating list */
+				list_push_back(&waiting_list, &target->elem);
 		}
 		else
+		{
+			// printf("thread_sleep wake_time = %d\n",wake_time);
 			list_push_front(&waiting_list, &target->elem);
+		}
 
 		do_schedule (THREAD_BLOCKED);
 	}
@@ -376,10 +369,8 @@ thread_ready (int64_t ticks) {
 			// thread_unblock(curr);
 			e = next;
 		}
-		else{
+		else /* 오름차순이기 때문에 조건을 만족하지 못하는 하나의 thread가 발견되면 그 이후의 wait thread들은 검색 필요가 없다 */
 			break;
-			// e = list_next(e);
-		}
 	}
 }
 
