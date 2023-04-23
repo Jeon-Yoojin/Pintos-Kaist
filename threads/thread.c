@@ -340,7 +340,6 @@ thread_sleep (int64_t wake_time) {
 		}
 		else
 		{
-			// printf("thread_sleep wake_time = %d\n",wake_time);
 			list_push_front(&waiting_list, &target->elem);
 		}
 

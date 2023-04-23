@@ -29,5 +29,4 @@ Differences in `diff -u' format:
 + (priority-donate-multiple2) Main thread should have priority 36.  Actual priority: 31.
   (priority-donate-multiple2) Threads b, a, c should have just finished, in that order.
   (priority-donate-multiple2) Main thread should have priority 31.  Actual priority: 31.
-- (priority-donate-multiple2) end
-+ (priority-donate-multiple2) 
+  (priority-donate-multiple2) end
