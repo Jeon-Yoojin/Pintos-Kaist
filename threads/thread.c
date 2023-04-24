@@ -27,6 +27,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list waiting_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -79,6 +80,25 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
+static bool
+value_more_priority (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority > b->priority;
+}
+static bool
+value_less_wakeup_ticks (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->wakeup_ticks < b->wakeup_ticks;
+}
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -108,6 +128,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&waiting_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -306,6 +327,50 @@ thread_yield (void) {
 		list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
+}
+void
+thread_sleep (int64_t wake_time) {
+	struct thread *target = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());
+
+	old_level = intr_disable ();
+	if (target != idle_thread)
+	{
+		target->wakeup_ticks = wake_time;
+		list_push_back(&waiting_list, &target->elem);
+		list_sort (&waiting_list, value_less_wakeup_ticks, NULL);
+		do_schedule (THREAD_BLOCKED);
+	}
+	else
+		do_schedule (THREAD_READY);
+	
+	intr_set_level (old_level);
+}
+void
+thread_ready (int64_t ticks) {
+	struct list_elem *e;
+	struct thread *curr;
+
+	// 현재 ticks와 비교해서 waiting list 안에 깨울 애들이 있는지 찾기
+	for (e = list_begin(&waiting_list); e != list_end(&waiting_list);){
+		curr = list_entry(e, struct thread, elem);
+		if (curr->wakeup_ticks <= ticks) {
+			// waiting list에서 삭제
+			struct list_elem *next = list_next(e);
+			list_remove(&curr->elem);
+			// status 변경 및 ready queue로 insert
+			curr->status = THREAD_READY;
+			list_push_back(&ready_list, &curr->elem);
+			// thread_unblock(curr);
+			e = next;
+		}
+		else /* 오름차순이기 때문에 조건을 만족하지 못하는 하나의 thread가 발견되면 그 이후의 wait thread들은 검색 필요가 없다 */
+			break;
+	}
+	/* 우선순위 순으로 ready list 정렬 */
+	list_sort (&ready_list, value_more_priority, NULL);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
