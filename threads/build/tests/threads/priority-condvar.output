@@ -4,23 +4,34 @@ Kernel command line: -q run priority-condvar
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  155,443,200 loops/s.
+Calibrating timer...  157,081,600 loops/s.
 Boot complete.
 Executing 'priority-condvar':
 (priority-condvar) begin
-Interrupt 0x0e (#PF Page-Fault Exception) at rip=8004207ca3
+(priority-condvar) Thread priority 23 starting.
+(priority-condvar) Thread priority 22 starting.
+(priority-condvar) Thread priority 21 starting.
+(priority-condvar) Thread priority 30 starting.
+(priority-condvar) Thread priority 29 starting.
+(priority-condvar) Thread priority 28 starting.
+(priority-condvar) Thread priority 27 starting.
+(priority-condvar) Thread priority 26 starting.
+(priority-condvar) Thread priority 25 starting.
+(priority-condvar) Thread priority 24 starting.
+(priority-condvar) Signaling...
+Interrupt 0x0e (#PF Page-Fault Exception) at rip=8004207c7c
  cr2=0000000000000018 error=               2
-rax 0000000000000000 rbx 0000000000204400 rcx 000000000000000a rdx 000000000000001f
-rsp 0000008004000ec0 rbp 0000008004000ee0 rsi 0000000000000001 rdi 0000008004000038
-rip 0000008004207ca3 r8 0000008004000e5c  r9 0000008004216b72 r10 0000000000000000
+rax 0000000000000000 rbx 0000000000000000 rcx 0000000000000000 rdx 0000000000000017
+rsp 0000008004234f00 rbp 0000008004234f20 rsi 0000008004000048 rdi 0000008004234068
+rip 0000008004207c7c r8 0000008004234f3c  r9 0000000000000000 r10 0000000000000000
 r11 0000000000000000 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
-r15 0000000000000000 rflags 00200206
+r15 0000000000000000 rflags 00000206
 es: 0010 ds: 0010 cs: 0008 ss: 0010
 Kernel PANIC at ../../threads/interrupt.c:361 in intr_handler(): Unexpected interrupt
-Call stack: 0x800421388a 0x8004208d4a 0x80042090fc 0x80042073eb 0x80042196ef 0x8004216cc6 0x8004206636 0x8004206783 0x8004206120.
+Call stack: 0x800421387d 0x8004208d3d 0x80042090ef 0x800420a209 0x800420a6b2 0x8004219867 0x80042074de.
 The `backtrace' program can make call stacks useful.
 Read "Backtraces" in the "Debugging Tools" chapter
 of the Pintos documentation for more information.
-Timer: 24 ticks
-Thread: 0 idle ticks, 24 kernel ticks, 0 user ticks
+Timer: 32 ticks
+Thread: 0 idle ticks, 32 kernel ticks, 0 user ticks
 Console: 1

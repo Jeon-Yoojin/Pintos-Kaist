@@ -396,9 +396,9 @@ void
 thread_set_priority (int new_priority) {
 	// 내용 추가 
 	// Project 1-2 
-	int curr_priority = thread_current()->priority;
-	thread_current() ->init_priority = curr_priority;
-	thread_current ()->priority = new_priority;
+	struct thread *curr = thread_current(); 
+	curr->init_priority = new_priority;
+	// curr->priority = new_priority;
 
 	/* donation 을 고려하여 thread_set_priority() 함수를 수정한다 */
 	/* refresh_priority() 함수를 사용하여 우선순위를 변경으로 인한
@@ -406,7 +406,7 @@ thread_set_priority (int new_priority) {
 	donate_priority(), test_max_pariority() 함수를 적절히
 	사용하여 priority donation 을 수행하고 스케줄링 한다. */
 	refresh_priority();
-	donate_priority();
+
 	preempt_priority();
 
 }
@@ -694,8 +694,9 @@ void preempt_priority(void){
 	struct thread *curr = thread_current();
 	if (idle_thread != thread_current()){
 		if (!list_empty(&ready_list)){
-			if (curr->priority < list_front(&ready_list)){	
-			thread_yield();
+			struct thread *temp = list_entry(list_begin(&ready_list), struct thread, elem);
+			if (curr->priority < temp->priority){	
+				thread_yield();
 			}
 		}
 	}
@@ -753,6 +754,7 @@ void refresh_priority(void)
 	{
 		list_sort(&curr->donations,value_more_priority,NULL);
 		struct list_elem *e = list_begin(&curr->donations);
-		curr->priority = list_entry(e,struct thread,elem)->priority;	
+		if (curr->priority < list_entry(e,struct thread,elem)->priority)
+			curr->priority = list_entry(e,struct thread,elem)->priority;	
 	}
 }

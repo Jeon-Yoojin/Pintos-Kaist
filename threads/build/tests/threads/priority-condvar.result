@@ -1,13 +1,11 @@
 FAIL
 Kernel panic in run: PANIC at ../../threads/interrupt.c:361 in intr_handler(): Unexpected interrupt
-Call stack: 0x800421388a 0x8004208d4a 0x80042090fc 0x80042073eb 0x80042196ef 0x8004216cc6 0x8004206636 0x8004206783 0x8004206120
+Call stack: 0x800421387d 0x8004208d3d 0x80042090ef 0x800420a209 0x800420a6b2 0x8004219867 0x80042074de
 Translation of call stack:
-0x000000800421388a: debug_panic (lib/kernel/debug.c:32)
-0x0000008004208d4a: intr_handler (threads/interrupt.c:365)
-0x00000080042090fc: intr_entry (threads/intr-stubs.o:?)
-0x00000080042073eb: thread_set_priority (threads/thread.c:410)
-0x00000080042196ef: test_priority_condvar (tests/threads/priority-condvar.c:28)
-0x0000008004216cc6: run_test (tests/threads/tests.c:57)
-0x0000008004206636: run_task (threads/init.c:252)
-0x0000008004206783: run_actions (threads/init.c:297)
-0x0000008004206120: main (threads/init.c:125)
+0x000000800421387d: debug_panic (lib/kernel/debug.c:32)
+0x0000008004208d3d: intr_handler (threads/interrupt.c:365)
+0x00000080042090ef: intr_entry (threads/intr-stubs.o:?)
+0x000000800420a209: lock_acquire (threads/synch.c:219)
+0x000000800420a6b2: cond_wait (threads/synch.c:326)
+0x0000008004219867: priority_condvar_thread (tests/threads/priority-condvar.c:51)
+0x00000080042074de: kernel_thread (threads/thread.c:491)

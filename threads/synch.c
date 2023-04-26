@@ -210,8 +210,8 @@ lock_acquire (struct lock *lock) {
 		curr->wait_on_lock = lock;
 		/* multiple donation 을 고려하기 위해 이전상태의 우선순위를 기억,
 		donation 을 받은 스레드의 thread 구조체를 list로 관리한다. */
-		list_push_back(&(lock->holder->donations),&curr->elem);
-		list_sort(&(lock->holder->donations),value_more_priority,NULL);
+		list_push_back(&lock->holder->donations,&curr->elem);
+		list_sort(&lock->holder->donations,value_more_priority,NULL);
 		/* priority donation 수행하기 위해 donate_priority() 함수 호출 */
 		donate_priority();
 	}
