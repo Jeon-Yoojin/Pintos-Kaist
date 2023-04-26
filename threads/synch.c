@@ -67,7 +67,7 @@ sema_down (struct semaphore *sema) {
 	old_level = intr_disable ();
 	while (sema->value == 0) {
 		struct thread *curr = thread_current ();
-		list_push_back (&sema->waiters, &curr->elem);
+		list_push_back (&sema->waiters, &thread_current ()->elem);
 		list_sort(&sema->waiters, value_more_priority, NULL);
 		thread_block ();
 	}
@@ -114,14 +114,15 @@ sema_up (struct semaphore *sema) {
 	old_level = intr_disable ();
 
 	if (!list_empty (&sema->waiters)){
-	// struct thread *tmp =  list_entry (list_front(&sema->waiters),struct thread, elem);
-	// printf("tmp->priority : %d\n",tmp->priority);
-	thread_unblock (list_entry (list_pop_front (&sema->waiters),
-			struct thread, elem));
+		thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+		sema->value++;
+		preempt_priority();
 	}
-
-	sema->value++;
-	preempt_priority();
+	else
+	{
+		sema->value++;
+		preempt_priority();
+	}
 	intr_set_level (old_level);
 
 	// if (curr->priority > list_begin(&ready_){
@@ -211,7 +212,7 @@ lock_acquire (struct lock *lock) {
 		curr->wait_on_lock = lock;
 		/* multiple donation 을 고려하기 위해 이전상태의 우선순위를 기억,
 		donation 을 받은 스레드의 thread 구조체를 list로 관리한다. */
-		list_push_back(&lock->holder->donations,&curr->donation_elem);
+		list_push_back(&lock->holder->donations,&thread_current()->donation_elem);
 		list_sort(&lock->holder->donations,value_more_priority_donation,NULL);
 		/* priority donation 수행하기 위해 donate_priority() 함수 호출 */
 		donate_priority();
@@ -258,6 +259,7 @@ lock_release (struct lock *lock) {
 	
 	/* remove_with_lock() 함수 추가 */
 	remove_with_lock(lock);
+	thread_current()->priority = thread_current()->init_priority;
 	/* refresh_priority() 함수 추가 */
 	refresh_priority();
 

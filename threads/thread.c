@@ -342,8 +342,10 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
+	{
 		list_push_back (&ready_list, &curr->elem);
 		list_sort(&ready_list,value_more_priority,NULL);
+	}
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -735,17 +737,15 @@ void remove_with_lock(struct lock *lock)
 	struct thread *curr = thread_current();
 	struct list_elem *e;
 	
-	for (e = list_begin(&curr->donations); e != list_end(&curr->donations);){
+	for (e = list_begin(&curr->donations); e != list_end(&curr->donations); ){
 		struct thread *dona = list_entry(e, struct thread, donation_elem);
-		struct list_elem *temp;
-		if (&dona->wait_on_lock == lock){
+		struct list_elem *temp = list_next(e);
+		if (dona->wait_on_lock == lock){
 			/* 현재 스레드의 donations 리스트를 확인하여 해지 할 lock 을
 			보유하고 있는 엔트리를 삭제 한다. */
-			temp = list_next(e);
 			list_remove(e);
-			e = temp;
 		}
-		e = list_next(e);
+		e = temp;
 	}
 }
 
