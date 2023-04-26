@@ -153,6 +153,7 @@ void do_iret (struct intr_frame *tf);
 
 void preempt_priority(void);
 bool value_more_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+bool value_more_priority_donation (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 
 void donate_priority(void);
 void remove_with_lock(struct lock *lock);

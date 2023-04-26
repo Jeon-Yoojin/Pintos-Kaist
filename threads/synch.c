@@ -66,7 +66,8 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		struct thread *curr = thread_current ();
+		list_push_back (&sema->waiters, &curr->elem);
 		list_sort(&sema->waiters, value_more_priority, NULL);
 		thread_block ();
 	}
@@ -210,8 +211,8 @@ lock_acquire (struct lock *lock) {
 		curr->wait_on_lock = lock;
 		/* multiple donation 을 고려하기 위해 이전상태의 우선순위를 기억,
 		donation 을 받은 스레드의 thread 구조체를 list로 관리한다. */
-		list_push_back(&lock->holder->donations,&curr->elem);
-		list_sort(&lock->holder->donations,value_more_priority,NULL);
+		list_push_back(&lock->holder->donations,&curr->donation_elem);
+		list_sort(&lock->holder->donations,value_more_priority_donation,NULL);
 		/* priority donation 수행하기 위해 donate_priority() 함수 호출 */
 		donate_priority();
 	}

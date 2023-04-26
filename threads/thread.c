@@ -89,6 +89,15 @@ value_more_priority (const struct list_elem *a_, const struct list_elem *b_,
   
   return a->priority > b->priority;
 }
+bool
+value_more_priority_donation (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, donation_elem);
+  const struct thread *b = list_entry (b_, struct thread, donation_elem);
+  
+  return a->priority > b->priority;
+}
 static bool
 value_less_wakeup_ticks (const struct list_elem *a_, const struct list_elem *b_,
             void *aux UNUSED) 
@@ -711,9 +720,9 @@ void donate_priority(void)
 	(Nested donation 그림 참고, nested depth 는 8로 제한한다. ) */
 	int idx = 0;
 	struct thread *curr = thread_current();
-	while (idx < 8 && (&curr->wait_on_lock !=NULL)){
+	while (idx < 8 && (curr->wait_on_lock !=NULL)){
 		int priority = curr->priority;
-		curr = &curr->wait_on_lock->holder;
+		curr = curr->wait_on_lock->holder;
 		curr->priority = priority;
 		idx++;
 	}
@@ -727,14 +736,16 @@ void remove_with_lock(struct lock *lock)
 	struct list_elem *e;
 	
 	for (e = list_begin(&curr->donations); e != list_end(&curr->donations);){
-		struct list_elem *temp = list_next(e);
-		struct thread *dona = list_entry(e, struct thread, elem);
+		struct thread *dona = list_entry(e, struct thread, donation_elem);
+		struct list_elem *temp;
 		if (&dona->wait_on_lock == lock){
 			/* 현재 스레드의 donations 리스트를 확인하여 해지 할 lock 을
 			보유하고 있는 엔트리를 삭제 한다. */
+			temp = list_next(e);
 			list_remove(e);
+			e = temp;
 		}
-		e = temp;
+		e = list_next(e);
 	}
 }
 
@@ -752,9 +763,9 @@ void refresh_priority(void)
 	우선순위로 설정한다. */
 	if (!list_empty(&curr->donations))
 	{
-		list_sort(&curr->donations,value_more_priority,NULL);
+		list_sort(&curr->donations,value_more_priority_donation,NULL);
 		struct list_elem *e = list_begin(&curr->donations);
-		if (curr->priority < list_entry(e,struct thread,elem)->priority)
-			curr->priority = list_entry(e,struct thread,elem)->priority;	
+		if (curr->priority < list_entry(e, struct thread, donation_elem)->priority)
+			curr->priority = list_entry(e, struct thread, donation_elem)->priority;	
 	}
 }
