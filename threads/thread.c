@@ -507,7 +507,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 	// 수정
-	list_init(&(t->donations));
+	list_init(&t->donations);
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
 }
@@ -725,21 +725,22 @@ void remove_with_lock(struct lock *lock)
 	struct thread *curr = thread_current();
 	struct list_elem *e;
 	
-	for (e = list_head(&curr->donations); e != list_end(&curr->donations);){
-		if (curr->wait_on_lock == lock){
-			struct list_elem *temp = e;
-			e = list_next(e);
+	for (e = list_begin(&curr->donations); e != list_end(&curr->donations);){
+		struct list_elem *temp = list_next(e);
+		struct thread *dona = list_entry(e, struct thread, elem);
+		if (&dona->wait_on_lock == lock){
 			/* 현재 스레드의 donations 리스트를 확인하여 해지 할 lock 을
 			보유하고 있는 엔트리를 삭제 한다. */
-			list_remove(temp);
+			list_remove(e);
 		}
-		
+		e = temp;
 	}
 }
 
 
 void refresh_priority(void)
 {
+
 	/* 스레드의 우선순위가 변경 되었을때 donation 을 고려하여
 	우선순위를 다시 결정 하는 함수를 작성 한다. */
 	struct thread *curr = thread_current();
@@ -748,8 +749,10 @@ void refresh_priority(void)
 	/* 가장 우선순위가 높은 donations 리스트의 스레드와
 	현재 스레드의 우선순위를 비교하여 높은 값을 현재 스레드의
 	우선순위로 설정한다. */
-	list_sort(&curr->donations,value_more_priority,NULL);
-	struct list_elem *e = list_begin(&curr->donations);
-	curr->priority = list_entry(e,struct thread,elem)->priority;
-
+	if (!list_empty(&curr->donations))
+	{
+		list_sort(&curr->donations,value_more_priority,NULL);
+		struct list_elem *e = list_begin(&curr->donations);
+		curr->priority = list_entry(e,struct thread,elem)->priority;	
+	}
 }
