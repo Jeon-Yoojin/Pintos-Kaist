@@ -42,5 +42,12 @@ void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
 	printf ("system call!\n");
+
+	// 시스템 콜(halt, exit,create, remove)을 구현하고 시스템 콜 핸들러를 통해 호출
+
 	thread_exit ();
 }
+
+
+
+

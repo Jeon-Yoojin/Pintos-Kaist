@@ -51,7 +51,7 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	//내용 수정 
-	/*Send Program Name */
+	/*3. Thread name parsing */
 	char *save_ptr;
 	char *temp = strtok_r(file_name," ",&save_ptr);
 	strlcpy(file_name,temp,sizeof(temp) * 2);
@@ -173,8 +173,8 @@ process_exec (void *f_name) {
 	bool success;
 	char *argv[128];
 	int idx=0;
-
-	/* Modify Parsing file_name */
+	
+	/* 1. Modify Parsing file_name */
 	char *token, *save_ptr;
 	for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;){
 		argv[idx] = token;
@@ -190,20 +190,16 @@ process_exec (void *f_name) {
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
-	// Push argc and argv
-	// 1. Push argv
-	_if.R.rsi = argv;
-	// 2. Push argc
-	_if.R.rdi = idx; 
-	
 	/* We first kill the current context */
 	process_cleanup ();
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
-	/*Push User Stack*/
+	/*2. Push User Stack*/
 	argument_stack(argv , idx , &_if.rsp);
+	_if.R.rsi = (uint64_t )_if.rsp + 8;
+	_if.R.rdi = idx;
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -212,7 +208,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	/* hex dump check */
-	hex_dump(_if.rsp, _if.rsp, KERN_BASE - _if.rsp, true);
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -230,7 +226,7 @@ process_exec (void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 
-// 내용 추가
+// 3. hex dump 출력을 위한 추가 (내용 수정)
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
@@ -349,7 +345,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
-// 내용 추가
+// 내용 수정
 /* Push Argument Stack */
 void argument_stack(char **parse ,int count , void **rsp){
 	// 1. Push Arguments
@@ -381,6 +377,7 @@ void argument_stack(char **parse ,int count , void **rsp){
 	// 2. Push the address of the next instruction (return address)
 	*rsp = *rsp - 8 ;
 	memset(*rsp, 0, sizeof(void *));
+
 }
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
