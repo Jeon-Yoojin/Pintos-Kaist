@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "interrupt.h": "c"
+        "interrupt.h": "c",
+        "hash_map": "c",
+        "hash_set": "c",
+        "algorithm": "c"
     }
 }

@@ -66,9 +66,12 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
+		struct thread *curr = thread_current ();
 		list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_sort(&sema->waiters, value_more_priority, NULL);
 		thread_block ();
 	}
+
 	sema->value--;
 	intr_set_level (old_level);
 }
@@ -109,11 +112,23 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
-		thread_unblock (list_entry (list_pop_front (&sema->waiters),
-					struct thread, elem));
-	sema->value++;
+
+	if (!list_empty (&sema->waiters)){
+		list_sort(&sema->waiters, value_more_priority, NULL);
+		thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+		sema->value++;
+		preempt_priority();
+	}
+	else
+	{
+		sema->value++;
+		preempt_priority();
+	}
 	intr_set_level (old_level);
+
+	// if (curr->priority > list_begin(&ready_){
+	// 		thread_yield();
+	// 	}
 }
 
 static void sema_test_helper (void *sema_);
@@ -182,13 +197,32 @@ lock_init (struct lock *lock) {
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+
+// 내용 수정
+// Project1-2 
 void
 lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	/* 해당 lock 의 holder가 존재 한다면 아래 작업을 수행한다. */
+	if (lock->holder){
+		struct thread *curr = thread_current();
+		/* 현재 스레드의 wait_on_lock 변수에 획득 하기를 기다리는 lock의 주소를 저장 */
+		curr->wait_on_lock = lock;
+		/* multiple donation 을 고려하기 위해 이전상태의 우선순위를 기억,
+		donation 을 받은 스레드의 thread 구조체를 list로 관리한다. */
+		list_push_back(&lock->holder->donations,&thread_current()->donation_elem);
+		list_sort(&lock->holder->donations,value_more_priority_donation,NULL);
+		/* priority donation 수행하기 위해 donate_priority() 함수 호출 */
+		donate_priority();
+	}
+	
 	sema_down (&lock->semaphore);
+	thread_current() -> wait_on_lock = NULL;
+
+	/* lock을 획득 한 후 lock holder 를 갱신한다. */
 	lock->holder = thread_current ();
 }
 
@@ -223,6 +257,13 @@ lock_release (struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	lock->holder = NULL;
+	
+	/* remove_with_lock() 함수 추가 */
+	remove_with_lock(lock);
+	thread_current()->priority = thread_current()->init_priority;
+	/* refresh_priority() 함수 추가 */
+	refresh_priority();
+
 	sema_up (&lock->semaphore);
 }
 
@@ -321,3 +362,4 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
 }
+

@@ -50,6 +50,12 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
+	//내용 수정 
+	/*3. Thread name parsing */
+	char *save_ptr;
+	char *temp = strtok_r(file_name," ",&save_ptr);
+	strlcpy(file_name,temp,strlen(temp)+1);
+
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -158,12 +164,23 @@ error:
 	thread_exit ();
 }
 
+// 내용 수정
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
 	bool success;
+	char *argv[128];
+	int idx=0;
+	
+	/* 1. Modify Parsing file_name */
+	char *token, *save_ptr;
+	for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;){
+		argv[idx] = token;
+		idx++;
+		token = strtok_r(NULL," ",&save_ptr);
+		}
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -179,10 +196,19 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
+	/*2. Push User Stack*/
+	argument_stack(argv , idx , &_if.rsp);
+	_if.R.rsi = (uint64_t )_if.rsp + 8;
+	_if.R.rdi = idx;
+
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
+
 	if (!success)
 		return -1;
+
+	/* hex dump check */
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -199,11 +225,14 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
+
+// 3. hex dump 출력을 위한 추가 (내용 수정)
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while (1){}
 	return -1;
 }
 
@@ -316,6 +345,41 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
+// 내용 수정
+/* Push Argument Stack */
+void argument_stack(char **parse ,int count , void **rsp){
+	// 1. Push Arguments
+	int temp=0;
+	void *address[128];
+	// 1-1. Push character strings from left to write.
+	for(int i = count - 1 ; i > -1 ; i--){
+		for(int j = strlen(parse[i]) ; j > -1 ; j--){
+			*rsp = *rsp -1 ;
+			**(char **)rsp = parse[i][j];
+			temp+=1;
+		}
+		address[i] = *rsp;
+	}
+	
+	// 1-2. Place padding if necessary to align it by 8 Byte.
+	*rsp = *rsp -(8-(temp%8)) ;
+	memset(*rsp, 0, 8-(temp%8));
+
+	*rsp = *rsp - 8 ;
+	memset(*rsp, 0, sizeof(char *));
+
+	// 1-3. Push start address of the character strings.
+	for (int i=count-1 ; i>-1; i--){
+		*rsp = *rsp - 8 ;
+		memcpy(*rsp, &address[i], sizeof(char *));
+	}
+
+	// 2. Push the address of the next instruction (return address)
+	*rsp = *rsp - 8 ;
+	memset(*rsp, 0, sizeof(void *));
+
+}
+
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
@@ -416,6 +480,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+
 
 	success = true;
 

@@ -209,6 +209,7 @@ strstr (const char *haystack, const char *needle) {
    token = strtok_r (NULL, " ", &save_ptr))
    printf ("'%s'\n", token);
 
+
 outputs:
 
 'String'

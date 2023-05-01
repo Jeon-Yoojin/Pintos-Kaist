@@ -80,12 +80,21 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
-static bool
+bool
 value_more_priority (const struct list_elem *a_, const struct list_elem *b_,
             void *aux UNUSED) 
 {
   const struct thread *a = list_entry (a_, struct thread, elem);
   const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority > b->priority;
+}
+bool
+value_more_priority_donation (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, donation_elem);
+  const struct thread *b = list_entry (b_, struct thread, donation_elem);
   
   return a->priority > b->priority;
 }
@@ -127,8 +136,12 @@ thread_init (void) {
 
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
+	// 내용 추가
+	// Project1-1
 	list_init (&ready_list);
+	// Project1-2
 	list_init (&waiting_list);
+	
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -227,6 +240,10 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+	
+	// 내용 추가
+	// Project1-2
+	preempt_priority();
 
 	return tid;
 }
@@ -263,6 +280,8 @@ thread_unblock (struct thread *t) {
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
+	// 내용 수정
+	list_sort(&ready_list,value_more_priority,NULL);
 	intr_set_level (old_level);
 }
 
@@ -286,7 +305,6 @@ thread_current (void) {
 	   recursion can cause stack overflow. */
 	ASSERT (is_thread (t));
 	ASSERT (t->status == THREAD_RUNNING);
-
 	return t;
 }
 
@@ -324,7 +342,10 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
+	{
 		list_push_back (&ready_list, &curr->elem);
+		list_sort(&ready_list,value_more_priority,NULL);
+	}
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -366,17 +387,39 @@ thread_ready (int64_t ticks) {
 			// thread_unblock(curr);
 			e = next;
 		}
+
 		else /* 오름차순이기 때문에 조건을 만족하지 못하는 하나의 thread가 발견되면 그 이후의 wait thread들은 검색 필요가 없다 */
 			break;
 	}
 	/* 우선순위 순으로 ready list 정렬 */
 	list_sort (&ready_list, value_more_priority, NULL);
+	
+	// 내용 추가
+	// Project1-2
+	if (!intr_context ()){
+		preempt_priority();
+	}
+	
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	// 내용 추가 
+	// Project 1-2 
+	struct thread *curr = thread_current(); 
+	curr->init_priority = new_priority;
+	// curr->priority = new_priority;
+
+	/* donation 을 고려하여 thread_set_priority() 함수를 수정한다 */
+	/* refresh_priority() 함수를 사용하여 우선순위를 변경으로 인한
+	donation 관련 정보를 갱신한다. 
+	donate_priority(), test_max_pariority() 함수를 적절히
+	사용하여 priority donation 을 수행하고 스케줄링 한다. */
+	refresh_priority();
+
+	preempt_priority();
+
 }
 
 /* Returns the current thread's priority. */
@@ -474,6 +517,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	// 수정
+	list_init(&t->donations);
+	t->init_priority = priority;
+	t->wait_on_lock = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -486,6 +533,7 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else
+		list_sort(&ready_list, value_more_priority, NULL);
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
@@ -652,4 +700,73 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+void preempt_priority(void){
+	struct thread *curr = thread_current();
+	if (idle_thread != thread_current()){
+		if (!list_empty(&ready_list)){
+			struct thread *temp = list_entry(list_begin(&ready_list), struct thread, elem);
+			if (curr->priority < temp->priority){	
+				thread_yield();
+			}
+		}
+	}
+}
+
+
+void donate_priority(void)
+{
+	/* priority donation 을 수행하는 함수를 구현한다.
+	현재 스레드가 기다리고 있는 lock 과 연결 된 모든 스레드들을 순회하며
+	현재 스레드의 우선순위를 lock 을 보유하고 있는 스레드에게 기부 한다.
+	(Nested donation 그림 참고, nested depth 는 8로 제한한다. ) */
+	int idx = 0;
+	struct thread *curr = thread_current();
+	while (idx < 8 && (curr->wait_on_lock !=NULL)){
+		int priority = curr->priority;
+		curr = curr->wait_on_lock->holder;
+		curr->priority = priority;
+		idx++;
+	}
+}
+
+void remove_with_lock(struct lock *lock)
+{
+	/* lock 을 해지 했을때 donations 리스트에서 해당 엔트리를
+	삭제 하기 위한 함수를 구현한다. */
+	struct thread *curr = thread_current();
+	struct list_elem *e;
+	
+	for (e = list_begin(&curr->donations); e != list_end(&curr->donations); ){
+		struct thread *dona = list_entry(e, struct thread, donation_elem);
+		struct list_elem *temp = list_next(e);
+		if (dona->wait_on_lock == lock){
+			/* 현재 스레드의 donations 리스트를 확인하여 해지 할 lock 을
+			보유하고 있는 엔트리를 삭제 한다. */
+			list_remove(e);
+		}
+		e = temp;
+	}
+}
+
+
+void refresh_priority(void)
+{
+
+	/* 스레드의 우선순위가 변경 되었을때 donation 을 고려하여
+	우선순위를 다시 결정 하는 함수를 작성 한다. */
+	struct thread *curr = thread_current();
+	/* 현재 스레드의 우선순위를 기부받기 전의 우선순위로 변경 */
+	curr->priority = curr->init_priority;
+	/* 가장 우선순위가 높은 donations 리스트의 스레드와
+	현재 스레드의 우선순위를 비교하여 높은 값을 현재 스레드의
+	우선순위로 설정한다. */
+	if (!list_empty(&curr->donations))
+	{
+		list_sort(&curr->donations,value_more_priority_donation,NULL);
+		struct list_elem *e = list_begin(&curr->donations);
+		if (curr->priority < list_entry(e, struct thread, donation_elem)->priority)
+			curr->priority = list_entry(e, struct thread, donation_elem)->priority;	
+	}
 }
