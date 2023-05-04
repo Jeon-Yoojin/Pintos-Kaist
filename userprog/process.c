@@ -208,7 +208,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	/* hex dump check */
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	//hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -232,7 +232,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	while (1){}
+	for(int i = 0 ; i < 100000000; i++) ;
 	return -1;
 }
 
@@ -240,11 +240,18 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	uint32_t *pd;
+	int fd;
+	
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	for (fd = curr->next_fd; fd >= 2; fd--) {
+		process_close_file(fd);
+	}
+	free(curr->fdt);
+	
 	process_cleanup ();
 }
 
@@ -702,3 +709,37 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
+
+int process_add_file (struct file *f) {
+	struct thread *curr = thread_current();
+	/* 파일 객체를 파일 디스크립터 테이블에 추가 */
+	/* 접근할 수 없는 index의 경우 return */
+	// if (curr->next_fd >= 64) {
+	// 	return 0;
+	// }
+	curr->fdt[curr->next_fd] = f;
+	/* 파일 디스크립터의 최대값 1 증가 */
+	curr->next_fd++;
+	/* 파일 디스크립터 리턴 */
+	return curr->next_fd - 1;
+}
+
+struct file *process_get_file (int fd) {
+	struct thread *curr = thread_current();
+	if (curr->fdt[fd] != NULL) {
+		return curr->fdt[fd];
+	}
+	else {
+		return NULL;
+	}
+}
+
+void process_close_file(int fd)
+{
+	struct thread *curr = thread_current();
+	/* 파일 디스크립터에 해당하는 파일을 닫음 */
+	file_close(process_get_file(fd));
+	/* TODO : 파일 디스크립터 테이블 해당 엔트리 초기화 */
+	curr->fdt[fd] = NULL;
+}
+

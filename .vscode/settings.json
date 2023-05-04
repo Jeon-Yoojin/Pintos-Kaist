@@ -3,6 +3,23 @@
         "interrupt.h": "c",
         "hash_map": "c",
         "hash_set": "c",
-        "algorithm": "c"
+        "algorithm": "c",
+        "*.inc": "c",
+        "file.h": "c",
+        "string.h": "c",
+        "syscall-nr.h": "c",
+        "thread.h": "c",
+        "intrinsic.h": "c",
+        "syscall.h": "c",
+        "filesys.h": "c",
+        "flags.h": "c",
+        "loader.h": "c",
+        "off_t.h": "c",
+        "gdt.h": "c",
+        "stdbool.h": "c",
+        "stdio.h": "c",
+        "process.h": "c",
+        "malloc.h": "c",
+        "stddef.h": "c"
     }
 }

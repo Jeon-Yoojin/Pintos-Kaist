@@ -11,4 +11,7 @@ void process_exit (void);
 void process_activate (struct thread *next);
 // 내용 수정
 void argument_stack(char **parse ,int count , void **rsp);
+int process_add_file (struct file *f);
+void process_close_file(int fd);
+struct file *process_get_file (int fd);
 #endif /* userprog/process.h */

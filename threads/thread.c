@@ -73,7 +73,7 @@ static tid_t allocate_tid (void);
  * always at the beginning of a page and the stack pointer is
  * somewhere in the middle, this locates the curent thread. */
 #define running_thread() ((struct thread *) (pg_round_down (rrsp ())))
-
+#define MAX_TABLE_SIZE 64
 
 // Global descriptor table for the thread_start.
 // Because the gdt will be setup after the thread_init, we should
@@ -237,12 +237,15 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-
-	/* Add to run queue. */
-	thread_unblock (t);
 	
-	// 내용 추가
-	// Project1-2
+	// Project 2
+	// 테이블 메모리 할당
+	t->fdt = calloc(64, sizeof(struct file *));
+	// t->fdt = palloc_get_page(PAL_ZERO);
+	// fd 값 초기화
+	t->next_fd = 2;
+	/* run queue에 추가 */
+	thread_unblock(t);
 	preempt_priority();
 
 	return tid;
