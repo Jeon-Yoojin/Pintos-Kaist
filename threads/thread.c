@@ -8,11 +8,15 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
-#include "threads/synch.h"
+// #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+// 수정
+#include "filesys/file.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
+
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -244,10 +248,22 @@ thread_create (const char *name, int priority,
 	// t->fdt = palloc_get_page(PAL_ZERO);
 	// fd 값 초기화
 	t->next_fd = 2;
+	/* 부모 프로세스 저장 */
+	/* 프로그램이 로드 되지 않음, 프로세스 종료되지 않음 */
+	t->process_loaded = false;
+	t->process_terminated = false;
+	/* semaphore 초기화 */
+	// sema_init(&t->exit_sema, 0);
+	// sema_init(&t->load_sema, 0);
+	// sema_init(&t->fork_sema, 0);
+	/* 자식 리스트에 추가 */
+	list_push_back(&thread_current()->child_list, &t->child_elem);
+
 	/* run queue에 추가 */
 	thread_unblock(t);
+	
 	preempt_priority();
-
+	
 	return tid;
 }
 
@@ -322,6 +338,7 @@ thread_tid (void) {
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
+	sema_up(&thread_current()->exit_sema);
 
 #ifdef USERPROG
 	process_exit ();
@@ -524,6 +541,13 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init(&t->donations);
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
+
+	t->exit_status = 0;
+	sema_init (&t->exit_sema, 0);
+	sema_init (&t->fork_sema, 0);
+	sema_init (&t->load_sema, 0);
+	/* thread 생성 시 자식 리스트 초기화 */
+	list_init(&t->child_list);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

@@ -7,10 +7,6 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
-#include "kernel/stdio.h"
-#include "filesys/file.h"
-#include "filesys/filesys.h"
-#include "userprog/process.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -59,10 +55,13 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			exit(f->R.rdi);
 			break;
 		case SYS_FORK:
+			f->R.rax = fork((char *)f->R.rdi, f);
 			break;
 		case SYS_EXEC:
+			//f->R.rax = exec((int *)f->R.rdi);
 			break;
 		case SYS_WAIT:
+			//f->R.rax = wait((tid_t)f->R.rdi);
 			break;
 		case SYS_CREATE:
 			/* filename, filesize*/
@@ -82,7 +81,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = read((int)f->R.rdi, (void *)f->R.rsi, f->R.rdx);
 			break;
 		case SYS_WRITE:
-			f->R.rax = write((int)f->R.rdi, (void *)f->R.rsi, f->R.rdx);
+			f->R.rax = write(f->R.rdi, (void *)f->R.rsi, f->R.rdx);
 			break;
 		case SYS_SEEK:
 			seek((int)f->R.rdi, (unsigned int)f->R.rsi);
@@ -116,7 +115,7 @@ void halt (void) {
 void exit (int status) {
 	/* 실행중인 스레드 구조체를 가져옴 */
 	struct thread *curr = thread_current();
-	
+	curr->exit_status  = status;
 	/* 프로세스 종료 메시지 출력, 
 	출력 양식: “프로세스이름: exit(종료상태)” */ 
 	printf ("%s: exit(%d)\n", curr->name, status);
@@ -210,7 +209,7 @@ int read (int fd, void *buffer, unsigned size)
 	}
 }
 
-int write(int fd, void *buffer, unsigned size)
+int write(int fd, const void *buffer, unsigned size)
 {
 	/* 파일에 동시 접근이 일어날 수 있으므로 Lock 사용 */
 	lock_acquire(filesys_lock);
@@ -253,4 +252,31 @@ void close (int fd)
 	/* 해당 파일 디스크립터에 해당하는 파일을 닫음 */
 	/* 파일 디스크립터 엔트리 초기화 */ 
 	process_close_file(fd);
+}
+
+tid_t fork (const char *thread_name, struct intr_frame *f) {
+	return process_fork(thread_name, f);
+}
+
+tid_t exec (const *cmd_line)
+{
+	/* 자식 프로세스 생성 */
+	//tid_t pid = fork(cmd_line);
+	/* 생성된 자식 프로세스의 프로세스 디스크립터를 검색 */
+	//struct thread *child = get_child_process(pid);
+	/* 자식 프로세스의 프로그램이 적재될 때까지 대기 */
+	// int success = process_wait(pid);
+	// /* 프로그램 적재 실패 시 -1 리턴 */
+	// if (success) {
+	// 	return child->tid;
+	// }
+	// else {
+	// 	return -1;
+	// }
+	/* 프로그램 적재 성공 시 자식 프로세스의 pid 리턴 */ 
+}
+
+int wait (tid_t pid)
+{
+	return process_wait(pid);
 }

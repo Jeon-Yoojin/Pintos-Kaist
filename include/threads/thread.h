@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+// 추가
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -97,8 +99,23 @@ struct thread {
 	struct lock *wait_on_lock;
 	struct list donations;
 	struct list_elem donation_elem;
+
 	struct file **fdt;
 	int next_fd;
+
+	/* 부모 프로세스의 디스크립터 */
+	/* 자식 리스트 element */
+	/* 자식 리스트 */
+	struct intr_frame parent_if;
+	struct list child_list;
+	struct list_elem child_elem;
+	
+	bool process_loaded;
+	bool process_terminated;
+	struct semaphore *exit_sema;
+	struct semaphore *load_sema;
+	struct semaphore *fork_sema;
+	int exit_status;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */

@@ -1,18 +1,12 @@
 FAIL
-Test output failed to match any acceptable form.
-
-Acceptable output:
-  (fork-once) begin
-  (fork-once) child run
-  child: exit(81)
-  (fork-once) Parent: child exit status is 81
-  (fork-once) end
-  fork-once: exit(0)
-Differences in `diff -u' format:
-  (fork-once) begin
-- (fork-once) child run
-- child: exit(81)
-- (fork-once) Parent: child exit status is 81
-+ (fork-once) Parent: child exit status is 4
-  (fork-once) end
-  fork-once: exit(0)
+Kernel panic in run: PANIC at ../../lib/kernel/list.c:341 in find_end_of_run(): assertion `a != NULL' failed.
+Call stack: 0x8004217f28 0x8004218b91 0x8004219049 0x800420a0ab 0x800421bb63 0x8004206773 0x80042068c0 0x800420617a
+Translation of call stack:
+0x0000008004217f28: debug_panic (lib/kernel/debug.c:32)
+0x0000008004218b91: find_end_of_run (lib/kernel/list.c:342)
+0x0000008004219049: list_sort (lib/kernel/list.c:401)
+0x000000800420a0ab: sema_down (threads/synch.c:72)
+0x000000800421bb63: process_wait (userprog/process.c:265)
+0x0000008004206773: run_task (threads/init.c:252)
+0x00000080042068c0: run_actions (threads/init.c:297)
+0x000000800420617a: main (threads/init.c:125)
