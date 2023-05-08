@@ -261,8 +261,8 @@ process_wait (tid_t child_tid UNUSED) {
 	struct thread *child = get_child_process(child_tid);
 	if (child == NULL) return -1;
 	sema_down(&child->exit_sema);
-	
 	list_remove(&child->child_elem);
+	sema_up(&child->free_sema);
 
 	return child->exit_status;
 }
@@ -274,6 +274,10 @@ process_exit (void) {
 	uint32_t *pd;
 	int fd;
 	
+	/* Destroy the current process's page directory and switch 
+	backto the kernel-only page directory. */
+	
+
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
@@ -282,6 +286,8 @@ process_exit (void) {
 		process_close_file(fd);
 	}
 	free(curr->fdt);
+	sema_up(&curr->exit_sema);
+	sema_down(&curr->free_sema);
 	
 	process_cleanup ();
 }

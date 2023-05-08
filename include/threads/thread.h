@@ -112,10 +112,12 @@ struct thread {
 	
 	bool process_loaded;
 	bool process_terminated;
-	struct semaphore *exit_sema;
-	struct semaphore *load_sema;
-	struct semaphore *fork_sema;
+	struct semaphore exit_sema;
+	struct semaphore load_sema;
+	struct semaphore fork_sema;
+	struct semaphore free_sema;
 	int exit_status;
+	// struct list file_list;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */

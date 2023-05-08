@@ -338,7 +338,8 @@ thread_tid (void) {
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
-	sema_up(&thread_current()->exit_sema);
+	//sema_up(&thread_current()->exit_sema);
+	//sema_down(&child->free_sema);
 
 #ifdef USERPROG
 	process_exit ();

@@ -7,6 +7,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "threads/palloc.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -55,13 +56,13 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			exit(f->R.rdi);
 			break;
 		case SYS_FORK:
-			f->R.rax = fork((char *)f->R.rdi, f);
+			f->R.rax = fork((const char *)f->R.rdi, f);
 			break;
 		case SYS_EXEC:
-			//f->R.rax = exec((int *)f->R.rdi);
+			f->R.rax = exec((const int *)f->R.rdi);
 			break;
 		case SYS_WAIT:
-			//f->R.rax = wait((tid_t)f->R.rdi);
+			f->R.rax = wait((tid_t)f->R.rdi);
 			break;
 		case SYS_CREATE:
 			/* filename, filesize*/
@@ -81,7 +82,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = read((int)f->R.rdi, (void *)f->R.rsi, f->R.rdx);
 			break;
 		case SYS_WRITE:
-			f->R.rax = write(f->R.rdi, (void *)f->R.rsi, f->R.rdx);
+			f->R.rax = write((int)f->R.rdi, (void *)f->R.rsi, f->R.rdx);
 			break;
 		case SYS_SEEK:
 			seek((int)f->R.rdi, (unsigned int)f->R.rsi);
@@ -102,7 +103,7 @@ void check_address (void *addr) {
 	/* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
 	유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 	struct thread *curr = thread_current();
-	if (!is_user_vaddr(addr)) {
+	if (!is_user_vaddr(addr) || !pml4_get_page(thread_current()->pml4,addr) || !addr) {
 		exit(-1);
 	}
 }
@@ -209,7 +210,7 @@ int read (int fd, void *buffer, unsigned size)
 	}
 }
 
-int write(int fd, const void *buffer, unsigned size)
+int write(int fd, void *buffer, unsigned size)
 {
 	/* 파일에 동시 접근이 일어날 수 있으므로 Lock 사용 */
 	lock_acquire(filesys_lock);
@@ -258,22 +259,14 @@ tid_t fork (const char *thread_name, struct intr_frame *f) {
 	return process_fork(thread_name, f);
 }
 
-tid_t exec (const *cmd_line)
+tid_t exec (const char *cmd_line)
 {
-	/* 자식 프로세스 생성 */
-	//tid_t pid = fork(cmd_line);
+	// /* 자식 프로세스 생성 */
+	// tid_t pid = fork(cmd_line, &thread_current()->tf);
 	/* 생성된 자식 프로세스의 프로세스 디스크립터를 검색 */
-	//struct thread *child = get_child_process(pid);
-	/* 자식 프로세스의 프로그램이 적재될 때까지 대기 */
-	// int success = process_wait(pid);
-	// /* 프로그램 적재 실패 시 -1 리턴 */
-	// if (success) {
-	// 	return child->tid;
-	// }
-	// else {
-	// 	return -1;
-	// }
-	/* 프로그램 적재 성공 시 자식 프로세스의 pid 리턴 */ 
+	char *new_file = palloc_get_page(PAL_USER);
+	strlcpy(new_file, cmd_line, PGSIZE);
+	process_exec(new_file);
 }
 
 int wait (tid_t pid)
