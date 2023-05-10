@@ -24,6 +24,7 @@ enum thread_status {
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+#define FDCOUNT_LIMIT 1500
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -117,7 +118,7 @@ struct thread {
 	struct semaphore fork_sema;
 	struct semaphore free_sema;
 	int exit_status;
-	// struct list file_list;
+	struct file *running_file; 
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */

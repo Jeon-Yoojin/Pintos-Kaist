@@ -84,8 +84,14 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	struct thread *curr = thread_current();
 	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
 	tid_t pid = thread_create (name, PRI_DEFAULT, __do_fork, thread_current ());
-	struct thread *child = get_child_process(pid);
-	sema_down(&child->fork_sema);
+	if (pid == TID_ERROR) {
+		return TID_ERROR;
+	}
+	struct thread *child_tid = get_child_process(pid);
+	sema_down(&child_tid->fork_sema);
+	if (child_tid->exit_status == -1) {
+		return TID_ERROR;
+	}
 	/* Clone current thread to new thread.*/
 	return pid;
 }
@@ -159,18 +165,22 @@ __do_fork (void *aux) {
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
 		goto error;
 #endif
-
 	/* TODO: Your code goes here.
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
+	if (parent->next_fd == FDCOUNT_LIMIT) {
+		goto error;
+	}
 	
 	// Project2 
 	// Duplicate the file Descriptor.
-	int idx;
-	for (idx = 2; idx < parent->next_fd; idx++){
-		if (parent->fdt[idx]){
+	for (int idx = 0; idx < FDCOUNT_LIMIT; idx++){
+		if (idx < 3) {
+			current->fdt[idx] = parent->fdt[idx];
+		}
+		if (parent->fdt[idx] != NULL){
 			current->fdt[idx] = file_duplicate(parent->fdt[idx]);
 		}
 	}
@@ -184,7 +194,9 @@ __do_fork (void *aux) {
 	if (succ)
 		do_iret (&if_);
 error:
-	thread_exit ();
+	current->exit_status = TID_ERROR;
+	sema_up(&current->fork_sema);
+	exit(TID_ERROR);
 }
 
 
@@ -219,6 +231,8 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
+	if (!success)
+		return -1; 
 
 	/*2. Push User Stack*/
 	argument_stack(argv , idx , &_if.rsp);
@@ -227,9 +241,6 @@ process_exec (void *f_name) {
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-
-	if (!success)
-		return -1;
 
 	/* hex dump check */
 	//hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
@@ -282,10 +293,11 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	for (fd = curr->next_fd; fd >= 2; fd--) {
-		process_close_file(fd);
-	}
-	free(curr->fdt);
+	//free(curr->fdt);
+	palloc_free_multiple(curr->fdt, 3);
+	curr->fdt = NULL;
+	file_close(curr->running_file);
+
 	sema_up(&curr->exit_sema);
 	sema_down(&curr->free_sema);
 	
@@ -514,7 +526,6 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
@@ -524,13 +535,14 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-
-
 	success = true;
+
+	t->running_file = file;
+	file_deny_write(t->running_file);
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	//file_close (file);
 	return success;
 }
 
@@ -754,6 +766,8 @@ int process_add_file (struct file *f) {
 	// if (curr->next_fd >= 64) {
 	// 	return 0;
 	// }
+	if (curr->next_fd >= FDCOUNT_LIMIT)
+        return -1;
 	curr->fdt[curr->next_fd] = f;
 	/* 파일 디스크립터의 최대값 1 증가 */
 	curr->next_fd++;
@@ -774,6 +788,7 @@ struct file *process_get_file (int fd) {
 void process_close_file(int fd)
 {
 	struct thread *curr = thread_current();
+	if (fd < 0 || fd > FDCOUNT_LIMIT) return NULL;
 	/* 파일 디스크립터에 해당하는 파일을 닫음 */
 	file_close(process_get_file(fd));
 	/* TODO : 파일 디스크립터 테이블 해당 엔트리 초기화 */

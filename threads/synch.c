@@ -324,6 +324,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	sema_init (&waiter.semaphore, 0);
 	list_push_back (&cond->waiters, &waiter.elem);
+	list_sort(&cond->waiters, cmp_sem_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -343,9 +344,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
+	if (!list_empty (&cond->waiters)){
+		list_sort(&cond->waiters, cmp_sem_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -363,3 +366,10 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 		cond_signal (cond, lock);
 }
 
+bool cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+	struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
+	/* 해당 condition variable 을 기다리는 세마포어 리스트를
+	가장 높은 우선순위를 가지는 스레드의 우선순위 순으로 정렬하도록 구현 */
+	return list_entry(list_begin(&sa->semaphore.waiters), struct thread, elem)->priority > list_entry(list_begin(&sb->semaphore.waiters), struct thread, elem)->priority;
+}

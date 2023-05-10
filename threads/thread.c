@@ -13,6 +13,7 @@
 #include "intrinsic.h"
 // 수정
 #include "filesys/file.h"
+#include "threads/palloc.h"
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -244,8 +245,8 @@ thread_create (const char *name, int priority,
 	
 	// Project 2
 	// 테이블 메모리 할당
-	t->fdt = calloc(64, sizeof(struct file *));
-	// t->fdt = palloc_get_page(PAL_ZERO);
+	//t->fdt = calloc(64, sizeof(struct file *));
+	t->fdt = palloc_get_multiple(PAL_ZERO, 3);
 	// fd 값 초기화
 	t->next_fd = 2;
 	/* 부모 프로세스 저장 */
@@ -258,7 +259,7 @@ thread_create (const char *name, int priority,
 	// sema_init(&t->fork_sema, 0);
 	/* 자식 리스트에 추가 */
 	list_push_back(&thread_current()->child_list, &t->child_elem);
-
+	t->running_file = NULL;
 	/* run queue에 추가 */
 	thread_unblock(t);
 	
@@ -338,8 +339,6 @@ thread_tid (void) {
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
-	//sema_up(&thread_current()->exit_sema);
-	//sema_down(&child->free_sema);
 
 #ifdef USERPROG
 	process_exit ();
@@ -547,6 +546,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	sema_init (&t->exit_sema, 0);
 	sema_init (&t->fork_sema, 0);
 	sema_init (&t->load_sema, 0);
+	sema_init (&t->free_sema, 0);
 	/* thread 생성 시 자식 리스트 초기화 */
 	list_init(&t->child_list);
 }

@@ -163,13 +163,15 @@ int open (const char *file)
 	}
 	/* 파일을 open */
 	struct file *fp = filesys_open(file);
+	if (fp == NULL) return -1;
 	/* 해당 파일 객체에 파일 디스크립터 부여 */
 	int fd = process_add_file(fp);
 	/* 파일 디스크립터 리턴 */
-	if (process_get_file(fd)) {
+	if (fd != -1) {
 		return fd;
 	}
 	else{
+		file_close(fp);
 		return -1;
 	}
 }
@@ -265,8 +267,9 @@ tid_t exec (const char *cmd_line)
 	// tid_t pid = fork(cmd_line, &thread_current()->tf);
 	/* 생성된 자식 프로세스의 프로세스 디스크립터를 검색 */
 	char *new_file = palloc_get_page(PAL_USER);
+	if (new_file == NULL) exit(-1);
 	strlcpy(new_file, cmd_line, PGSIZE);
-	process_exec(new_file);
+	if (process_exec(new_file) == -1) return -1;
 }
 
 int wait (tid_t pid)

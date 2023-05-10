@@ -11,4 +11,5 @@ userprog/syscall.o: ../../userprog/syscall.c \
  ../../include/lib/syscall-nr.h ../../include/threads/loader.h \
  ../../include/userprog/gdt.h ../../include/threads/flags.h \
  ../../include/intrinsic.h ../../include/threads/mmu.h \
- ../../include/threads/pte.h ../../include/threads/vaddr.h
+ ../../include/threads/pte.h ../../include/threads/vaddr.h \
+ ../../include/threads/palloc.h
