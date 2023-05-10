@@ -20,6 +20,7 @@
         "stdio.h": "c",
         "process.h": "c",
         "malloc.h": "c",
-        "stddef.h": "c"
+        "stddef.h": "c",
+        "intr-stubs.h": "c"
     }
 }
