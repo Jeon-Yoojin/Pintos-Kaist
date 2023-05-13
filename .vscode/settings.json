@@ -3,6 +3,13 @@
     "*.c": "c",
     "list.h": "c",
     "synch.h": "c",
-    "process.h": "c"
+    "process.h": "c",
+    "thread.h": "c",
+    "pte.h": "c",
+    "vm.h": "c",
+    "inspect.h": "c",
+    "malloc.h": "c",
+    "mmu.h": "c",
+    "uninit.h": "c"
   }
 }

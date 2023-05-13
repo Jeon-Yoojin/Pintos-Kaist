@@ -25,6 +25,7 @@ vm_anon_init (void) {
 }
 
 /* Initialize the file mapping */
+/* 필요에 따라 추가할 수 있음 */
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
