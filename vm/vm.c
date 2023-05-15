@@ -4,6 +4,8 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
+#define USER_STK_LIMIT (1 << 20)
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void vm_init(void)
@@ -73,8 +75,9 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		// TODO: should modify the field after calling the uninit_new.
 		new_page->writable = writable;
 		/* TODO: Insert the page into the spt. */
-		return spt_insert_page( spt, new_page);
+		return spt_insert_page(spt, new_page);
 	}
+	return false;
 err:
 	return false;
 }
@@ -165,6 +168,8 @@ vm_get_frame(void)
 static void
 vm_stack_growth(void *addr UNUSED)
 {
+	/* anonymous 페이지를 할당하여 스택 크기를 늘림 */
+	vm_alloc_page_with_initializer (VM_ANON, pg_round_down(addr), 1, NULL, NULL);
 }
 
 /* Handle the fault on write_protected page */
@@ -179,15 +184,30 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 {
 	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
 	struct page *page = NULL;
+	uintptr_t rsp;
 	/* TODO: Validate the fault */
 	/* if문으로 not present인지 확인 -> find page*/
 	/* TODO: Your code goes here */
 	if (not_present) {
+		rsp = (user == true)? f->rsp : thread_current()->user_rsp;
+		if (USER_STACK - USER_STK_LIMIT <= rsp - 8 && rsp - 8 <= addr && addr <= USER_STACK) {
+			vm_stack_growth(addr);
+		}
+		
 		page = spt_find_page(spt, addr);
 		if (page == NULL)
 			return false;
+
+		if (write == 1 && page->writable == 0)
+			return false;
+
 		return vm_do_claim_page(page);
 	}
+	/*이 함수에서는 Page Fault가 스택을 증가시켜야하는 경우에 해당하는지 아닌지를 확인해야 합니다.
+	스택 증가로 Page Fault 예외를 처리할 수 있는지 확인한 경우, 
+	Page Fault가 발생한 주소로 vm_stack_growth를 호출합니다.*/
+	/* rsp-8 <= addr <= user_stack이면  */
+
 	return false;
 }
 
@@ -252,10 +272,43 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 	hash_init (&spt->pages, supplemental_page_hash, supplemental_page_less, NULL);
 }
 
+// void copy_hash_elem(struct hash_elem *e, void *aux) {
+// 	struct page *p = hash_entry(e, struct page, hash_elem);
+// 	/* memcpy(dst, src, dst_len); */
+// 	size_t page_size = PGSIZE;
+// 	// TODO: 함수 수정해야함..
+//     memcpy(aux + (uint8_t)p->va, /*src->pages + src->pages의 주소*/, page_size);
+// }
+
 /* Copy supplemental page table from src to dst */
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 								  struct supplemental_page_table *src UNUSED)
 {
+	/* src의 supplemental page table를 반복하면서
+	dst의 supplemental page table의 엔트리의 정확한 복사본을 만드세요 */
+	/* 해시 테이블의 요소 하나하나에 대해 action() 을 임의의 순서로 호출합니다.  */
+	struct hash_iterator spt_iterator, dst_iterator;
+	hash_first (&spt_iterator, &src->pages);
+
+	while (hash_next (&spt_iterator)) {
+		struct page *src_page = hash_entry (hash_cur (&spt_iterator), struct page, hash_elem);
+		if (VM_TYPE(src_page->operations->type) == VM_UNINIT) {
+			vm_alloc_page_with_initializer(src_page->uninit.type, src_page->va, src_page->writable, src_page->uninit.init, src_page->uninit.aux);
+			continue;
+		}
+		vm_alloc_page(src_page->operations->type, src_page->va, src_page->writable);
+		struct page *dst_page = spt_find_page(dst, src_page->va);
+		vm_claim_page(src_page->va);
+
+		memcpy (dst_page->frame->kva, src_page->frame->kva, (size_t)PGSIZE);
+	}
+	return true;
+}
+
+void destroy_hash_elem(struct hash_elem *e, void *aux) {
+	struct page *p = hash_entry(e, struct page, hash_elem);
+    destroy(p);
+	free(p);
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -263,4 +316,5 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_clear(&spt->pages, &destroy_hash_elem);
 }

@@ -10,6 +10,9 @@
     "inspect.h": "c",
     "malloc.h": "c",
     "mmu.h": "c",
-    "uninit.h": "c"
+    "uninit.h": "c",
+    "hash.h": "c",
+    "string.h": "c",
+    "*.inc": "c"
   }
 }

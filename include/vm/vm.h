@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 #include "threads/mmu.h"
+#include "lib/string.h"
+#include "lib/kernel/hash.h"
 
 enum vm_type {
 	/* page not initialized */

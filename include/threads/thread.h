@@ -119,6 +119,7 @@ struct thread
 	struct semaphore wait_sema;
 
 	struct file *running; // 현재 실행중인 파일
+	uintptr_t user_rsp;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

@@ -64,6 +64,9 @@ void syscall_init(void)
 void syscall_handler(struct intr_frame *f UNUSED)
 {
 	int syscall_n = f->R.rax; /* 시스템 콜 넘버 */
+	/* thread 내의 user_rsp 멤버에 현재 f->rsp를 저장한다. */
+	thread_current()->user_rsp = f->rsp;
+
 	switch (syscall_n)
 	{
 	case SYS_HALT:
@@ -221,6 +224,9 @@ int read(int fd, void *buffer, unsigned size)
 			lock_release(&filesys_lock);
 			return -1;
 		}
+		/* buffer의 시작 주소를 기준으로 페이지를 찾고 해당 페이지가 writable인지 체크하기,
+		체크한 값에 대해 지금 write 할려는 시도가 가능하지 않다면 리턴*/
+		
 		bytes_read = file_read(file, buffer, size);
 		lock_release(&filesys_lock);
 	}
