@@ -14,6 +14,7 @@
 #include "devices/input.h"
 #include "lib/kernel/stdio.h"
 #include "threads/palloc.h"
+#include "vm/vm.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -139,6 +140,10 @@ void exit(int status)
 bool create(const char *file, unsigned initial_size)
 {
 	check_address(file);
+	lock_acquire(&filesys_lock);
+	bool success = filesys_create(file, initial_size);
+	lock_release(&filesys_lock);
+	return success;
 	return filesys_create(file, initial_size);
 }
 
@@ -151,12 +156,17 @@ bool remove(const char *file)
 int open(const char *file_name)
 {
 	check_address(file_name);
+	lock_acquire(&filesys_lock);
 	struct file *file = filesys_open(file_name);
 	if (file == NULL)
+	{
+		lock_release(&filesys_lock);
 		return -1;
+	}
 	int fd = process_add_file(file);
 	if (fd == -1)
 		file_close(file);
+	lock_release(&filesys_lock);
 	return fd;
 }
 
@@ -226,7 +236,14 @@ int read(int fd, void *buffer, unsigned size)
 		}
 		/* buffer의 시작 주소를 기준으로 페이지를 찾고 해당 페이지가 writable인지 체크하기,
 		체크한 값에 대해 지금 write 할려는 시도가 가능하지 않다면 리턴*/
-		
+
+		struct supplemental_page_table *spt = &thread_current()->spt;
+		struct page *p = spt_find_page(spt, buffer);
+		if (p != NULL && !p->writable)
+		{
+			lock_release(&filesys_lock);
+			exit(-1);
+		}
 		bytes_read = file_read(file, buffer, size);
 		lock_release(&filesys_lock);
 	}

@@ -297,8 +297,9 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			continue;
 		}
 		vm_alloc_page(src_page->operations->type, src_page->va, src_page->writable);
-		struct page *dst_page = spt_find_page(dst, src_page->va);
 		vm_claim_page(src_page->va);
+		struct page *dst_page = spt_find_page(dst, src_page->va);
+		
 
 		memcpy (dst_page->frame->kva, src_page->frame->kva, (size_t)PGSIZE);
 	}

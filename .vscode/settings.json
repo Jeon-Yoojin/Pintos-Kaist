@@ -13,6 +13,8 @@
     "uninit.h": "c",
     "hash.h": "c",
     "string.h": "c",
-    "*.inc": "c"
+    "*.inc": "c",
+    "filesys.h": "c",
+    "file.h": "c"
   }
 }
