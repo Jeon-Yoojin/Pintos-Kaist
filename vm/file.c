@@ -25,8 +25,12 @@ bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
+	struct lazy_load_arg * arg = (struct lazy_load_arg *)page->uninit.aux;
 
 	struct file_page *file_page = &page->file;
+	file_page->file = arg->file;
+	file_page->file_ofs = arg->ofs;
+	file_page->read_bytes = arg->read_bytes;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -44,9 +48,16 @@ file_backed_swap_out (struct page *page) {
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
-	/* is_dirty 0으로 set하기 */
-	/* 파일에 쓰기 */
-	struct file_page *file_page UNUSED = &page->file;
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct file_page *arg = &page->file;
+		if (pml4_is_dirty(thread_current()->pml4, page->va)){
+			/* 어떤 offset부터 썼는지 확인 후 그 offset부터 write */
+			file_write_at(arg->file, page->va, arg->read_bytes, arg->file_ofs);
+			/* dirty bit 0으로 set */
+			pml4_set_dirty(thread_current()->pml4, page->va, 0);
+		}
+	pml4_clear_page(thread_current()->pml4, page->va);
+	// struct file_page *file_page UNUSED = &page->file;
 }
 
 /* Do the mmap */
@@ -60,11 +71,16 @@ do_mmap (void *addr, size_t length, int writable,
 			-> length도 확인하고, spt_find_page로 page를 찾는다.
 			*/
 			/* 파일의 오프셋 바이트부터 length 만큼을 프로세스의 가상주소공간의 addr에 매핑*/
-			/* 한 페이지만큼을 읽고 가상주소에 매핑 -> 페이지 새로 만들고 do_claim */
-			uint32_t read_bytes = length;
-			uint32_t zero_bytes;
-			uint8_t *upage = (uint8_t *)addr;
-			off_t ofs = offset;
+			/* 한 페이지만큼을 읽고 가상주소에 매핑 -> 페이지 새로 만들기 */
+			struct file *f = file_reopen(file);
+			uint32_t read_bytes = length > file_length(f)? file_length(f) : length;
+			uint32_t zero_bytes = PGSIZE - read_bytes % PGSIZE;
+			/* 시작 주소를 return해야 한다. */
+			void *ret_val = addr;
+			
+			ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
+			ASSERT(pg_ofs(addr) == 0);	 // upage가 페이지 정렬되어 있는지 확인
+			ASSERT(offset % PGSIZE == 0) // ofs가 페이지 정렬되어 있는지 확인
 
 			while (read_bytes > 0 || zero_bytes > 0)
 			{
@@ -76,25 +92,45 @@ do_mmap (void *addr, size_t length, int writable,
 
 				struct lazy_load_arg *aux = NULL;
 				aux = (struct lazy_load_arg*)malloc(sizeof(struct lazy_load_arg));
-				aux->file = file;
-				aux->ofs = ofs;
+				aux->file = f;
+				aux->ofs = offset;
 				aux->read_bytes = page_read_bytes;
 				aux->zero_bytes = page_zero_bytes;
 
-				if (!vm_alloc_page_with_initializer(VM_FILE, upage,
+				if (!vm_alloc_page_with_initializer(VM_FILE, addr,
 													writable, lazy_load_segment, aux))
-					return false;
+					return NULL;
 
+				struct page *p = spt_find_page(&thread_current()->spt, addr);
+				p->page_cnt = read_bytes / PGSIZE + 1;
+				
 				/* Advance. */
 				read_bytes -= page_read_bytes;
 				zero_bytes -= page_zero_bytes;
-				upage += PGSIZE;
-				ofs += page_read_bytes;
+				addr += PGSIZE;
+				offset += page_read_bytes;
 			}
-			return true;
+			return ret_val;
 }
 
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+	// page의 전체 길이 -> spt_find_page로 해당 addr를 찾아 그 페이지 구조체의 길이 얻어오기
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+	off_t page_cnt = page->page_cnt;
+	
+	/* 변경된 파일은 쓴 후, dirty bit 원래대로 돌려주기
+	spt 테이블에서 삭제하고 pml4 테이블에서 삭제*/
+	for (int i = 0; i < page_cnt; i++)
+	{
+		addr += PGSIZE;
+		if (page)
+		{
+			/* spt_remove_page -> vm_dealloc_page -> destroy(file_destroy)순으로 호출 */
+			spt_remove_page(&thread_current()->spt, page);		
+		}
+		page = spt_find_page(&thread_current()->spt, addr);
+	}
+	
 }

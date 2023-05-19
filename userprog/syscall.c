@@ -33,6 +33,8 @@ void close(int fd);
 tid_t fork(const char *thread_name, struct intr_frame *f);
 int exec(const char *cmd_line);
 int wait(int pid);
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
 
 /* System call.
  *
@@ -111,6 +113,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
 	}
 }
 
@@ -303,4 +311,34 @@ int exec(const char *cmd_line)
 int wait(int pid)
 {
 	return process_wait(pid);
+}
+
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+	struct file *file = process_get_file(fd);
+	if (file == NULL)
+		return NULL;
+	if (file_length(file) == 0)
+		return NULL;
+	if (!length || (int)length < 0)
+		return NULL;
+	if (addr == 0)
+		return NULL;
+	if (fd < 2)
+		return NULL;
+	if (offset % PGSIZE)
+		return NULL;
+	if (is_kernel_vaddr(addr))
+		return NULL;
+	if (addr != pg_round_down(addr))
+		return NULL;
+	if (spt_find_page(&thread_current()->spt, addr))
+		return NULL;
+
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void munmap(void *addr)
+{
+	do_munmap(addr);
 }

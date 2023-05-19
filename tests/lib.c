@@ -173,6 +173,8 @@ compare_bytes (const void *read_data_, const void *expected_data_, size_t size,
   size_t i, j;
   size_t show_cnt;
 
+  printf("read_data, %d\n", read_data);
+  printf("expected_data, %d\n", expected_data);
   if (!memcmp (read_data, expected_data, size))
     return;
   

@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "userprog/process.h"
 
 #define USER_STK_LIMIT (1 << 20)
 
@@ -117,6 +118,7 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
+	hash_delete(&spt->pages, &page->hash_elem);
 	vm_dealloc_page(page);
 	return true;
 }
@@ -296,12 +298,32 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			vm_alloc_page_with_initializer(src_page->uninit.type, src_page->va, src_page->writable, src_page->uninit.init, src_page->uninit.aux);
 			continue;
 		}
-		vm_alloc_page(src_page->operations->type, src_page->va, src_page->writable);
-		vm_claim_page(src_page->va);
-		struct page *dst_page = spt_find_page(dst, src_page->va);
 		
+		// vm_claim_page(src_page->va);
+		if (src_page->operations->type == VM_ANON)
+		{
+			vm_alloc_page(src_page->operations->type, src_page->va, src_page->writable);
+			struct page *dst_page = spt_find_page(dst, src_page->va);
+			vm_claim_page(src_page->va);
+			memcpy (dst_page->frame->kva, src_page->frame->kva, (size_t)PGSIZE);
+		}
+		else if (src_page->operations->type == VM_FILE)
+		{
+			struct lazy_load_arg *aux = (struct lazy_load_arg*)malloc(sizeof(struct lazy_load_arg));
+			/* src initializer가 호출될 때 file_page 구조체 내에 저장해 둔 file/ofs/read_bytes를 꺼낸다. */
+			/* 같은 파일이 아닌 복제한 파일을 넣어 준다. 자식이 파일을 쓰고 닫아 버리면 접근할 수 없기 때문(?) */
+			aux->file = file_duplicate(src_page->file.file);
+			aux->ofs = src_page->file.file_ofs;
+			aux->read_bytes = src_page->file.read_bytes;
 
-		memcpy (dst_page->frame->kva, src_page->frame->kva, (size_t)PGSIZE);
+			vm_alloc_page_with_initializer(src_page->operations->type, src_page->va, src_page->writable, NULL, aux);
+			struct page *dst_page = spt_find_page(dst, src_page->va);
+
+			/* dst_page의 경우 프레임 할당받지 않기 때문에, initializer가 호출되지 않는다. 따라서 직접 initializer를 호출 */
+			file_backed_initializer(dst_page, VM_FILE, NULL);
+			pml4_set_page(thread_current()->pml4, dst_page->va, src_page->frame->kva, src_page->writable);
+			dst_page->frame = src_page->frame;
+		}
 	}
 	return true;
 }
@@ -317,5 +339,5 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	hash_clear(&spt->pages, &destroy_hash_elem);
+	hash_clear(&spt->pages, destroy_hash_elem);
 }
