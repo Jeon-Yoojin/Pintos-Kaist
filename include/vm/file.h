@@ -10,6 +10,7 @@ struct file_page {
 	struct file *file;
 	off_t file_ofs;
 	off_t read_bytes;/** type 확실치 않음 */
+	off_t zero_bytes;
 };
 
 void vm_file_init (void);

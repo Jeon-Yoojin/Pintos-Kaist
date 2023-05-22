@@ -66,11 +66,26 @@ struct page {
 	};
 };
 
+struct slot {
+	struct page *page;
+	struct list_elem swap_elem;
+	int slot_number;
+};
+
 /* The representation of "frame" */
 struct frame {
 	void *kva;
 	struct page *page;
+	/* list_elem으로 frame_elem을 추가 */
+	struct list_elem frame_elem;
 };
+
+/* swap_table과 frame_table을 전역으로 선언 */
+struct list swap_table;
+struct list frame_table;
+
+struct lock swap_lock;
+struct lock frame_lock;
 
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.

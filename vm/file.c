@@ -31,18 +31,56 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	file_page->file = arg->file;
 	file_page->file_ofs = arg->ofs;
 	file_page->read_bytes = arg->read_bytes;
+	file_page->zero_bytes = arg->zero_bytes;
+
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	// void *success = do_mmap(page->va, file_length(page->file.file), page->writable, page->file.file, page->file.file_ofs);
+	// if (success != NULL)
+	// {
+	// 	return true;
+	// }
+	// return false;
+	
+
+	// struct file_page *file_page UNUSED = &p;
+	lazy_load_segment(page, page->uninit.aux);
+	// /* lazy_load_segment와 유사 */
+	// uint32_t read_bytes = file_page->read_bytes;
+	// uint32_t zero_bytes = file_page->zero_bytes;
+	// off_t ofs = file_page->file_ofs;
+	// struct file *file = file_page->file;
+
+	// file_seek(file, ofs);
+	// /* Do calculate how to fill this page.
+	// 	* We will read PAGE_READ_BYTES bytes from FILE
+	// 	* and zero the final PAGE_ZERO_BYTES bytes. */
+
+	// /* Get a page of memory. */
+	// uint8_t *kpage = page->frame->kva;
+	// if (kpage == NULL)
+	// 	return false;
+
+	// /* Load this page. */
+	// if (file_read(file, kpage, read_bytes) != (int)read_bytes)
+	// {
+	// 	palloc_free_page(kpage);
+	// 	return false;
+	// }
+	// memset(kpage + read_bytes, 0, zero_bytes);
+
+	// return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	file_backed_destroy(page);
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -75,12 +113,10 @@ do_mmap (void *addr, size_t length, int writable,
 			struct file *f = file_reopen(file);
 			uint32_t read_bytes = length > file_length(f)? file_length(f) : length;
 			uint32_t zero_bytes = PGSIZE - read_bytes % PGSIZE;
+			int total_page_count = length <= PGSIZE ? 1 : length % PGSIZE ? length / PGSIZE + 1
+																  : length / PGSIZE; // 이 매핑을 위해 사용한 총 페이지 수
 			/* 시작 주소를 return해야 한다. */
 			void *ret_val = addr;
-			
-			ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
-			ASSERT(pg_ofs(addr) == 0);	 // upage가 페이지 정렬되어 있는지 확인
-			ASSERT(offset % PGSIZE == 0) // ofs가 페이지 정렬되어 있는지 확인
 
 			while (read_bytes > 0 || zero_bytes > 0)
 			{
@@ -102,7 +138,7 @@ do_mmap (void *addr, size_t length, int writable,
 					return NULL;
 
 				struct page *p = spt_find_page(&thread_current()->spt, addr);
-				p->page_cnt = read_bytes / PGSIZE + 1;
+				p->page_cnt = total_page_count;
 				
 				/* Advance. */
 				read_bytes -= page_read_bytes;
@@ -128,6 +164,7 @@ do_munmap (void *addr) {
 		if (page)
 		{
 			/* spt_remove_page -> vm_dealloc_page -> destroy(file_destroy)순으로 호출 */
+			// destroy(page);
 			spt_remove_page(&thread_current()->spt, page);		
 		}
 		page = spt_find_page(&thread_current()->spt, addr);

@@ -13,12 +13,15 @@ void vm_init(void)
 {
 	vm_anon_init();
 	vm_file_init();
+
 #ifdef EFILESYS /* For project 4 */
 	pagecache_init();
 #endif
 	register_inspect_intr();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	lock_init(&frame_lock);
+	list_init(&frame_table);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -64,14 +67,14 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* enum vm_type type, void *upage, bool writable,
 				vm_initializer *init, void *aux */
 		if (VM_TYPE(type) == VM_ANON) {
-			uninit_new(new_page, upage, init, type, aux, anon_initializer);
+			uninit_new(new_page, pg_round_down(upage), init, type, aux, anon_initializer);
 		}
 		else if (VM_TYPE(type) == VM_FILE) {
-			uninit_new(new_page, upage, init, type, aux, file_backed_initializer);
+			uninit_new(new_page, pg_round_down(upage), init, type, aux, file_backed_initializer);
 		}
 		/* 지워도 되는 주석 */
 		else {
-			uninit_new(new_page, upage, init, type, aux, NULL);
+			uninit_new(new_page, pg_round_down(upage), init, type, aux, NULL);
 		}
 		// TODO: should modify the field after calling the uninit_new.
 		new_page->writable = writable;
@@ -95,12 +98,11 @@ spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 	page->va = pg_round_down(va);
 	e = hash_find(&spt->pages, &page->hash_elem);
 	/* [수정] hash_entry로 struct page 형태로 바꿔줘야 함 */
+	free(page);
 	if (e != NULL) {
 		return hash_entry(e, struct page, hash_elem);
 	}
-	else {
-		return NULL;
-	}
+	return NULL;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -120,15 +122,34 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
 	hash_delete(&spt->pages, &page->hash_elem);
 	vm_dealloc_page(page);
-	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim(void)
 {
+	struct list_elem *e;
 	struct frame *victim = NULL;
 	/* TODO: The policy for eviction is up to you. */
+	/* frame_table을 돌면서 frame->page의 access bit가 0인 첫 번째 frame을 찾는다 */
+	lock_acquire(&frame_lock);
+	for (e = list_begin (&frame_table); e != list_end (&frame_table); e = list_next (e))
+	{
+		struct frame *f = list_entry(e, struct frame, frame_elem);
+		if (!pml4_is_accessed(thread_current()->pml4, f->page->va))
+		{
+			lock_release(&frame_lock);
+			return f;
+		}
+		pml4_set_accessed(thread_current()->pml4, f->page->va, 0);
+	}
+	e = list_begin(&frame_table);
+	victim = list_entry(e, struct frame, frame_elem);
+
+	lock_release(&frame_lock);
+	/* for문 밖에 lock을 걸자 - table 종류별로 lock을 생성 */
+	/* 모든 access bit가 true인 경우에 대한 처리 */
+	/* for문을 돌면서 모든 access bit 초기화(0) */
 
 	return victim;
 }
@@ -140,7 +161,10 @@ vm_evict_frame(void)
 {
 	struct frame *victim UNUSED = vm_get_victim();
 	/* TODO: swap out the victim and return the evicted frame. */
-
+	if (swap_out(victim->page))
+	{
+		return victim;
+	}
 	return NULL;
 }
 
@@ -157,9 +181,19 @@ vm_get_frame(void)
 	/* TODO: Fill this function. */
 	frame->kva = palloc_get_page(PAL_USER);
 	if (frame->kva == NULL) {
-		PANIC("TODO");
+		/* eviction이 일어나는 시점 */
+		free(frame);
+		struct frame *victim = vm_evict_frame();
+		// victim->page->frame = NULL;
+		victim->page = NULL;
+
+		return victim;
 	}
 	frame->page = NULL;
+	/* 새로 만들어준 frame에 대해서만 table에 추가 */
+	lock_acquire(&frame_lock);
+	list_push_back(&frame_table, &frame->frame_elem);
+	lock_release(&frame_lock);
 
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
@@ -315,14 +349,15 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			aux->file = file_duplicate(src_page->file.file);
 			aux->ofs = src_page->file.file_ofs;
 			aux->read_bytes = src_page->file.read_bytes;
+			aux->zero_bytes = src_page->file.zero_bytes;
 
 			vm_alloc_page_with_initializer(src_page->operations->type, src_page->va, src_page->writable, NULL, aux);
 			struct page *dst_page = spt_find_page(dst, src_page->va);
 
 			/* dst_page의 경우 프레임 할당받지 않기 때문에, initializer가 호출되지 않는다. 따라서 직접 initializer를 호출 */
 			file_backed_initializer(dst_page, VM_FILE, NULL);
-			pml4_set_page(thread_current()->pml4, dst_page->va, src_page->frame->kva, src_page->writable);
 			dst_page->frame = src_page->frame;
+			pml4_set_page(thread_current()->pml4, dst_page->va, src_page->frame->kva, src_page->writable);
 		}
 	}
 	return true;
