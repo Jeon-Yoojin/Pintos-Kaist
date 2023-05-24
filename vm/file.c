@@ -49,7 +49,7 @@ file_backed_swap_in (struct page *page, void *kva) {
 	
 
 	// struct file_page *file_page UNUSED = &p;
-	lazy_load_segment(page, page->uninit.aux);
+	return lazy_load_segment(page, file_page);
 	// /* lazy_load_segment와 유사 */
 	// uint32_t read_bytes = file_page->read_bytes;
 	// uint32_t zero_bytes = file_page->zero_bytes;
@@ -73,14 +73,13 @@ file_backed_swap_in (struct page *page, void *kva) {
 	// 	return false;
 	// }
 	// memset(kpage + read_bytes, 0, zero_bytes);
-
-	// return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	file_backed_destroy(page);
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -164,8 +163,9 @@ do_munmap (void *addr) {
 		if (page)
 		{
 			/* spt_remove_page -> vm_dealloc_page -> destroy(file_destroy)순으로 호출 */
-			// destroy(page);
-			spt_remove_page(&thread_current()->spt, page);		
+			/* [?] remove_page 대신 destroy로 해야 작동이 된다. */
+			destroy(page);
+			// spt_remove_page(&thread_current()->spt, page);		
 		}
 		page = spt_find_page(&thread_current()->spt, addr);
 	}

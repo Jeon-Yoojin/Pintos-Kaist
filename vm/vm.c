@@ -128,29 +128,29 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 static struct frame *
 vm_get_victim(void)
 {
-	struct list_elem *e;
 	struct frame *victim = NULL;
 	/* TODO: The policy for eviction is up to you. */
-	/* frame_table을 돌면서 frame->page의 access bit가 0인 첫 번째 frame을 찾는다 */
+	struct thread *curr = thread_current();
+
 	lock_acquire(&frame_lock);
-	for (e = list_begin (&frame_table); e != list_end (&frame_table); e = list_next (e))
+	struct list_elem *start = list_begin(&frame_table);
+	for (start; start != list_end(&frame_table); start = list_next(start))
 	{
-		struct frame *f = list_entry(e, struct frame, frame_elem);
-		if (!pml4_is_accessed(thread_current()->pml4, f->page->va))
+		victim = list_entry(start, struct frame, frame_elem);
+		if (victim->page == NULL) // frame에 할당된 페이지가 없는 경우 (page가 destroy된 경우 )
 		{
 			lock_release(&frame_lock);
-			return f;
+			return victim;
 		}
-		pml4_set_accessed(thread_current()->pml4, f->page->va, 0);
+		if (pml4_is_accessed(curr->pml4, victim->page->va))
+			pml4_set_accessed(curr->pml4, victim->page->va, 0);
+		else
+		{
+			lock_release(&frame_lock);
+			return victim;
+		}
 	}
-	e = list_begin(&frame_table);
-	victim = list_entry(e, struct frame, frame_elem);
-
 	lock_release(&frame_lock);
-	/* for문 밖에 lock을 걸자 - table 종류별로 lock을 생성 */
-	/* 모든 access bit가 true인 경우에 대한 처리 */
-	/* for문을 돌면서 모든 access bit 초기화(0) */
-
 	return victim;
 }
 
@@ -221,6 +221,8 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
 	struct page *page = NULL;
 	uintptr_t rsp;
+	// printf("addr: %x\n", addr);
+	// printf("user: %d\n", user);
 	/* TODO: Validate the fault */
 	/* if문으로 not present인지 확인 -> find page*/
 	/* TODO: Your code goes here */
