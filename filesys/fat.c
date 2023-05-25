@@ -153,6 +153,11 @@ fat_boot_create (void) {
 void
 fat_fs_init (void) {
 	/* TODO: Your code goes here. */
+	/* length 초기화 및 data_start 초기화 */
+	fat_fs->fat_length = fat_fs->bs.fat_sectors / fat_fs->bs.sectors_per_cluster;
+	fat_fs->data_start = fat_fs->bs.fat_sectors + fat_fs->bs.fat_start;
+
+	/* data_start = fat area의 첫 번째 섹터 + data area의 길이 */
 }
 
 /*----------------------------------------------------------------------------*/
@@ -165,6 +170,39 @@ fat_fs_init (void) {
 cluster_t
 fat_create_chain (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	cluster_t new_cluster = find_zero_cluster();
+	/* 0인 경우 임의의 FAT[clst] = 0인 idx를 연결한다 */
+	if (clst == 0)
+	{
+		fat_put(new_cluster, EOChain);
+	}
+	/* else, chain에서 EOC를 찾기 */
+	else
+	{
+		cluster_t end_of_chain = find_eoc(clst);
+		fat_put(end_of_chain, new_cluster);
+		fat_put(new_cluster, EOChain);
+	}
+	return new_cluster;
+}
+
+cluster_t
+find_zero_cluster (void) {
+	for (cluster_t i = 2; i < fat_fs->fat_length; i++)
+	{
+		if (fat_fs->fat[i] == 0)
+		{
+			return i;
+		}
+	}
+	PANIC("NO CLUSTER");
+}
+
+cluster_t
+find_eoc (cluster_t clst) {
+	if (fat_fs->fat[clst] == EOChain)
+		return clst;
+	return find_eoc(fat_fs->fat[clst]);
 }
 
 /* Remove the chain of clusters starting from CLST.
@@ -172,22 +210,34 @@ fat_create_chain (cluster_t clst) {
 void
 fat_remove_chain (cluster_t clst, cluster_t pclst) {
 	/* TODO: Your code goes here. */
+	cluster_t i;
+	for (i = clst; fat_fs->fat[i] != EOChain; i = fat_fs->fat[i])
+	{
+		fat_put(i, 0);
+	}
+	fat_put(i, 0);
+	fat_put(pclst, EOChain);
 }
 
 /* Update a value in the FAT table. */
 void
 fat_put (cluster_t clst, cluster_t val) {
 	/* TODO: Your code goes here. */
+	fat_fs->fat[clst] = val;
 }
 
 /* Fetch a value in the FAT table. */
 cluster_t
 fat_get (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	return fat_fs->fat[clst];
 }
 
 /* Covert a cluster # to a sector number. */
 disk_sector_t
 cluster_to_sector (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	/* FAT 시작하는 부분의 sector에다가 clst * SECTORS_PER_CLUSTER 더하기 */
+	return fat_fs->data_start + clst * SECTORS_PER_CLUSTER;
+	// [?] 뭔가 data_start가 아닌지 확인
 }
